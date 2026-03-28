@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 456) rotate(90) scale(640)">
+      <stop stop-color="#0C2034"/>
+      <stop offset="1" stop-color="#081421"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(228)">
+      <stop stop-color="#5FD3CC" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#5FD3CC" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="14" y="14" width="996" height="996" rx="148" fill="url(#bg)"/>
+  <rect x="19" y="19" width="986" height="986" rx="144" stroke="#9DF3E9" stroke-width="10"/>
+  <circle cx="512" cy="512" r="398" stroke="#1A456B" stroke-width="108"/>
+  <circle cx="512" cy="512" r="298" stroke="#19788E" stroke-width="86"/>
+  <circle cx="512" cy="512" r="214" stroke="#30BBA3" stroke-width="80"/>
+  <circle cx="512" cy="512" r="228" fill="url(#glow)"/>
+  <path d="M512 168C618.039 168 704 253.961 704 360C704 415.052 680.83 464.691 643.648 499.699L512 820L380.352 499.699C343.17 464.691 320 415.052 320 360C320 253.961 405.961 168 512 168Z" fill="#F4F6F8"/>
+  <path d="M390 610L650 468" stroke="#FFBE5C" stroke-width="52" stroke-linecap="round"/>
+  <path d="M650 468L700 410" stroke="#FFBE5C" stroke-width="40" stroke-linecap="round"/>
+  <rect x="432" y="410" width="160" height="180" rx="48" fill="#232D3F"/>
+  <rect x="494" y="436" width="36" height="124" fill="white"/>
+  <rect x="454" y="482" width="116" height="36" fill="white"/>
+</svg>

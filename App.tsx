@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {useEffect, useMemo, useState} from 'react';
 import {
   Alert,
+  Linking,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -177,6 +178,28 @@ function App() {
     }
   };
 
+  const openInAmap = async () => {
+    const targetName = pointNameInput.trim() || '目标地点';
+    const amapUrl =
+      `amapuri://route/plan/?sourceApplication=${encodeURIComponent('扫个墓')}` +
+      `&dlat=${targetLocation.latitude}` +
+      `&dlon=${targetLocation.longitude}` +
+      `&dname=${encodeURIComponent(targetName)}` +
+      '&dev=0&t=0';
+
+    try {
+      const supported = await Linking.canOpenURL(amapUrl);
+      if (!supported) {
+        Alert.alert('未检测到高德地图', '请先安装高德地图后再尝试导航。');
+        return;
+      }
+
+      await Linking.openURL(amapUrl);
+    } catch {
+      Alert.alert('打开失败', '暂时无法打开高德地图，请稍后再试。');
+    }
+  };
+
   const applySavedPoint = (point: SavedPoint) => {
     setTargetLocation({latitude: point.latitude, longitude: point.longitude});
     setTargetLatInput(String(point.latitude));
@@ -267,6 +290,10 @@ function App() {
 
           <Pressable style={styles.buttonSave} onPress={savePoint}>
             <Text style={styles.buttonSaveText}>保存这个目标点位</Text>
+          </Pressable>
+
+          <Pressable style={styles.buttonAmap} onPress={openInAmap}>
+            <Text style={styles.buttonAmapText}>打开高德地图导航</Text>
           </Pressable>
         </View>
 
@@ -445,6 +472,17 @@ const styles = StyleSheet.create({
   },
   buttonSaveText: {
     color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  buttonAmap: {
+    borderRadius: 12,
+    paddingVertical: 13,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+  },
+  buttonAmapText: {
+    color: '#1f2937',
     fontWeight: '800',
     fontSize: 14,
   },
