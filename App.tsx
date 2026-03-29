@@ -6,6 +6,7 @@ import {
   PermissionsAndroid,
   Platform,
   Pressable,
+  SafeAreaView as LegacySafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,9 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Geolocation from 'react-native-geolocation-service';
-import MapView, {Marker, Polyline} from 'react-native-maps';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {reportError} from './errorReporting';
 
 type Coordinate = {
   latitude: number;
@@ -33,6 +32,84 @@ const DEFAULT_TARGET: Coordinate = {
 };
 
 const STORAGE_KEY = 'saved_grave_points_v1';
+
+type GeolocationModule = {
+  requestAuthorization?: (mode: 'whenInUse' | 'always') => Promise<string>;
+  getCurrentPosition: (
+    success: (position: {coords: Coordinate}) => void,
+    error?: (error: {code: number; message: string}) => void,
+    options?: {
+      enableHighAccuracy?: boolean;
+      timeout?: number;
+      maximumAge?: number;
+    },
+  ) => void;
+};
+
+type MapsModule = {
+  default: React.ComponentType<any>;
+  Marker: React.ComponentType<any>;
+  Polyline: React.ComponentType<any>;
+};
+
+let cachedGeolocationModule: GeolocationModule | null | undefined;
+let cachedMapsModule: MapsModule | null | undefined;
+let cachedSafeAreaViewComponent: React.ComponentType<any> | undefined;
+
+const loadGeolocationModule = (): GeolocationModule | null => {
+  if (cachedGeolocationModule !== undefined) {
+    return cachedGeolocationModule;
+  }
+
+  try {
+    cachedGeolocationModule = require('react-native-geolocation-service') as GeolocationModule;
+    return cachedGeolocationModule;
+  } catch (error) {
+    cachedGeolocationModule = null;
+    reportError(error, {
+      source: 'load-geolocation-module',
+    });
+    return null;
+  }
+};
+
+const loadMapsModule = (): MapsModule | null => {
+  if (cachedMapsModule !== undefined) {
+    return cachedMapsModule;
+  }
+
+  try {
+    cachedMapsModule = require('react-native-maps') as MapsModule;
+    return cachedMapsModule;
+  } catch (error) {
+    cachedMapsModule = null;
+    reportError(error, {
+      source: 'load-maps-module',
+    });
+    return null;
+  }
+};
+
+const loadSafeAreaViewComponent = (): React.ComponentType<any> => {
+  if (cachedSafeAreaViewComponent) {
+    return cachedSafeAreaViewComponent;
+  }
+
+  try {
+    cachedSafeAreaViewComponent = (
+      require('react-native-safe-area-context') as {
+        SafeAreaView: React.ComponentType<any>;
+      }
+    ).SafeAreaView;
+  } catch (error) {
+    cachedSafeAreaViewComponent = LegacySafeAreaView;
+    reportError(error, {
+      source: 'load-safe-area-view',
+    });
+  }
+
+  return cachedSafeAreaViewComponent;
+};
 
 const isValidCoordinateValue = (value: unknown, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
@@ -72,6 +149,9 @@ class MapRenderBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
+    reportError(error, {
+      source: 'map-render-boundary',
+    });
     console.warn('Map render failed', error);
   }
 
@@ -98,6 +178,13 @@ function App() {
   const [targetLngInput, setTargetLngInput] = useState(String(DEFAULT_TARGET.longitude));
   const [pointNameInput, setPointNameInput] = useState('');
   const [savedPoints, setSavedPoints] = useState<SavedPoint[]>([]);
+  const [shouldRenderEmbeddedMap, setShouldRenderEmbeddedMap] = useState(Platform.OS === 'ios');
+
+  const mapsModule = shouldRenderEmbeddedMap ? loadMapsModule() : null;
+  const SafeAreaViewComponent = loadSafeAreaViewComponent();
+  const MapViewComponent = mapsModule?.default;
+  const MarkerComponent = mapsModule?.Marker;
+  const PolylineComponent = mapsModule?.Polyline;
 
   useEffect(() => {
     const loadSavedPoints = async () => {
@@ -112,6 +199,9 @@ function App() {
           setSavedPoints(parsed.filter(isSavedPoint).slice(0, 20));
         }
       } catch {
+        reportError(new Error('Failed to load saved points'), {
+          source: 'load-saved-points',
+        });
         Alert.alert('读取失败', '本地保存的点位读取失败。');
       }
     };
@@ -164,6 +254,12 @@ function App() {
   };
 
   const requestLocationPermission = async () => {
+    const geolocation = loadGeolocationModule();
+    if (!geolocation) {
+      Alert.alert('定位暂不可用', '当前设备未成功加载定位模块，请稍后重试。');
+      return false;
+    }
+
     if (Platform.OS === 'android') {
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
@@ -171,18 +267,24 @@ function App() {
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     }
 
-    const result = await Geolocation.requestAuthorization('whenInUse');
+    const result = await geolocation.requestAuthorization?.('whenInUse');
     return result === 'granted';
   };
 
   const locateMe = async () => {
+    const geolocation = loadGeolocationModule();
+    if (!geolocation) {
+      Alert.alert('定位暂不可用', '当前设备未成功加载定位模块，请稍后重试。');
+      return;
+    }
+
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
       Alert.alert('权限未开启', '请允许定位权限后再重试。');
       return;
     }
 
-    Geolocation.getCurrentPosition(
+    geolocation.getCurrentPosition(
       position => {
         setCurrentLocation({
           latitude: position.coords.latitude,
@@ -190,6 +292,12 @@ function App() {
         });
       },
       error => {
+        reportError(new Error(error.message), {
+          source: 'geolocation',
+          extra: {
+            code: error.code,
+          },
+        });
         Alert.alert('定位失败', error.message);
       },
       {
@@ -231,6 +339,9 @@ function App() {
       setPointNameInput('');
       Alert.alert('已保存', `已记住点位: ${name}`);
     } catch {
+      reportError(new Error('Failed to save target point'), {
+        source: 'save-point',
+      });
       Alert.alert('保存失败', '本地点位保存失败，请重试。');
     }
   };
@@ -253,6 +364,9 @@ function App() {
 
       await Linking.openURL(amapUrl);
     } catch {
+      reportError(new Error('Failed to open amap navigation'), {
+        source: 'open-amap',
+      });
       Alert.alert('打开失败', '暂时无法打开高德地图，请稍后再试。');
     }
   };
@@ -265,7 +379,7 @@ function App() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaViewComponent style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.blobTop} />
@@ -279,22 +393,48 @@ function App() {
         </View>
 
         <View style={styles.mapCard}>
-          <MapRenderBoundary>
-            <MapView style={styles.map} region={mapRegion}>
-              <Marker coordinate={targetLocation} title="目标地点" pinColor="#f59e0b" />
+          {MapViewComponent && MarkerComponent && PolylineComponent ? (
+            <MapRenderBoundary>
+              <MapViewComponent style={styles.map} region={mapRegion}>
+                <MarkerComponent
+                  coordinate={targetLocation}
+                  title="目标地点"
+                  pinColor="#f59e0b"
+                />
 
-              {currentLocation ? (
-                <>
-                  <Marker coordinate={currentLocation} title="我的位置" pinColor="#0ea5e9" />
-                  <Polyline
-                    coordinates={[currentLocation, targetLocation]}
-                    strokeColor="#ef4444"
-                    strokeWidth={4}
-                  />
-                </>
+                {currentLocation ? (
+                  <>
+                    <MarkerComponent
+                      coordinate={currentLocation}
+                      title="我的位置"
+                      pinColor="#0ea5e9"
+                    />
+                    <PolylineComponent
+                      coordinates={[currentLocation, targetLocation]}
+                      strokeColor="#ef4444"
+                      strokeWidth={4}
+                    />
+                  </>
+                ) : null}
+              </MapViewComponent>
+            </MapRenderBoundary>
+          ) : (
+            <View style={styles.mapFallback}>
+              <Text style={styles.mapFallbackTitle}>内置地图暂未开启</Text>
+              <Text style={styles.mapFallbackText}>
+                {Platform.OS === 'android'
+                  ? '部分安卓设备在冷启动时加载系统地图会直接闪退，先关闭首屏地图预览以保证应用能正常打开。'
+                  : '当前设备的地图模块加载失败，应用其他功能仍可继续使用。'}
+              </Text>
+              {Platform.OS === 'android' ? (
+                <Pressable
+                  style={styles.mapFallbackButton}
+                  onPress={() => setShouldRenderEmbeddedMap(true)}>
+                  <Text style={styles.mapFallbackButtonText}>尝试加载内置地图</Text>
+                </Pressable>
               ) : null}
-            </MapView>
-          </MapRenderBoundary>
+            </View>
+          )}
           <View style={styles.mapInfoBar}>
             <Text style={styles.mapInfoText}>
               当前点:{' '}
@@ -381,7 +521,7 @@ function App() {
           </ScrollView>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </SafeAreaViewComponent>
   );
 }
 
@@ -471,6 +611,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  mapFallbackButton: {
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  mapFallbackButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   mapInfoBar: {
     paddingHorizontal: 12,

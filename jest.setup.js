@@ -1,5 +1,16 @@
 /* eslint-env jest */
 
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+  }),
+);
+
+global.ErrorUtils = {
+  getGlobalHandler: jest.fn(() => undefined),
+  setGlobalHandler: jest.fn(),
+};
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
   setItem: jest.fn(() => Promise.resolve()),
