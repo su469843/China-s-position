@@ -1,3 +1,6 @@
+/* eslint-env node */
+/* eslint-disable no-bitwise */
+
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -212,8 +215,6 @@ function renderIcon(size) {
   const scale = size / 1024;
 
   const sx = value => value * scale;
-  const bgRadius = 174;
-
   painter.fill((x, y) => {
     const sdf = roundedRectSdf(x, y, center, center, size - sx(28), size - sx(28), sx(148));
     if (sdf > 0) {

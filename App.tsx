@@ -34,6 +34,63 @@ const DEFAULT_TARGET: Coordinate = {
 
 const STORAGE_KEY = 'saved_grave_points_v1';
 
+const isValidCoordinateValue = (value: unknown, min: number, max: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+
+const isSavedPoint = (value: unknown): value is SavedPoint => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<SavedPoint>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    isValidCoordinateValue(candidate.latitude, -90, 90) &&
+    isValidCoordinateValue(candidate.longitude, -180, 180)
+  );
+};
+
+type MapRenderBoundaryProps = {
+  children: React.ReactNode;
+};
+
+type MapRenderBoundaryState = {
+  hasError: boolean;
+};
+
+class MapRenderBoundary extends React.Component<
+  MapRenderBoundaryProps,
+  MapRenderBoundaryState
+> {
+  state: MapRenderBoundaryState = {
+    hasError: false,
+  };
+
+  static getDerivedStateFromError() {
+    return {hasError: true};
+  }
+
+  componentDidCatch(error: Error) {
+    console.warn('Map render failed', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.mapFallback}>
+          <Text style={styles.mapFallbackTitle}>地图暂时不可用</Text>
+          <Text style={styles.mapFallbackText}>
+            当前设备的地图模块加载失败，应用其他功能仍可继续使用。
+          </Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function App() {
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [targetLocation, setTargetLocation] = useState<Coordinate>(DEFAULT_TARGET);
@@ -50,9 +107,9 @@ function App() {
           return;
         }
 
-        const parsed = JSON.parse(raw) as SavedPoint[];
+        const parsed = JSON.parse(raw) as unknown;
         if (Array.isArray(parsed)) {
-          setSavedPoints(parsed);
+          setSavedPoints(parsed.filter(isSavedPoint).slice(0, 20));
         }
       } catch {
         Alert.alert('读取失败', '本地保存的点位读取失败。');
@@ -222,20 +279,22 @@ function App() {
         </View>
 
         <View style={styles.mapCard}>
-          <MapView style={styles.map} region={mapRegion}>
-            <Marker coordinate={targetLocation} title="目标地点" pinColor="#f59e0b" />
+          <MapRenderBoundary>
+            <MapView style={styles.map} region={mapRegion}>
+              <Marker coordinate={targetLocation} title="目标地点" pinColor="#f59e0b" />
 
-            {currentLocation ? (
-              <>
-                <Marker coordinate={currentLocation} title="我的位置" pinColor="#0ea5e9" />
-                <Polyline
-                  coordinates={[currentLocation, targetLocation]}
-                  strokeColor="#ef4444"
-                  strokeWidth={4}
-                />
-              </>
-            ) : null}
-          </MapView>
+              {currentLocation ? (
+                <>
+                  <Marker coordinate={currentLocation} title="我的位置" pinColor="#0ea5e9" />
+                  <Polyline
+                    coordinates={[currentLocation, targetLocation]}
+                    strokeColor="#ef4444"
+                    strokeWidth={4}
+                  />
+                </>
+              ) : null}
+            </MapView>
+          </MapRenderBoundary>
           <View style={styles.mapInfoBar}>
             <Text style={styles.mapInfoText}>
               当前点:{' '}
@@ -392,6 +451,26 @@ const styles = StyleSheet.create({
   map: {
     height: 280,
     width: '100%',
+  },
+  mapFallback: {
+    height: 280,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: '#dbeafe',
+  },
+  mapFallbackTitle: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  mapFallbackText: {
+    marginTop: 8,
+    color: '#334155',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   mapInfoBar: {
     paddingHorizontal: 12,
