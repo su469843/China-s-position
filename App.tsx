@@ -195,7 +195,7 @@ function App() {
   const [targetLngInput, setTargetLngInput] = useState(String(DEFAULT_TARGET.longitude));
   const [pointNameInput, setPointNameInput] = useState('');
   const [savedPoints, setSavedPoints] = useState<SavedPoint[]>([]);
-  const [shouldRenderEmbeddedMap, setShouldRenderEmbeddedMap] = useState(true);
+  const [shouldRenderEmbeddedMap, setShouldRenderEmbeddedMap] = useState(false);
   const [debugModeEnabled, setDebugModeEnabled] = useState(false);
   const [debugLogsText, setDebugLogsText] = useState('');
   const [isDebugPullArmed, setIsDebugPullArmed] = useState(false);
