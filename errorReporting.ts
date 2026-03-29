@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppState, Platform} from 'react-native';
 
+import {appendAppLog} from './appLogger';
 import {APP_VERSION, ERROR_REPORTING_URL} from './appConfig';
 
 type ErrorContext = {
@@ -52,11 +53,23 @@ const normalizeError = (error: unknown) => {
 export const isErrorReportingEnabled = () => ERROR_REPORTING_URL.trim().length > 0;
 
 export async function reportError(error: unknown, context: ErrorContext = {}) {
+  const normalized = normalizeError(error);
+
+  appendAppLog({
+    level: 'error',
+    source: context.source ?? 'unknown',
+    message: normalized.message,
+    details: {
+      fatal: context.fatal ?? false,
+      name: normalized.name,
+      stack: normalized.stack ?? 'no-stack',
+      ...(context.extra ?? {}),
+    },
+  });
+
   if (!isErrorReportingEnabled()) {
     return;
   }
-
-  const normalized = normalizeError(error);
 
   try {
     await fetch(ERROR_REPORTING_URL, {
@@ -77,6 +90,12 @@ export async function reportError(error: unknown, context: ErrorContext = {}) {
       }),
     });
   } catch (reportingError) {
+    appendAppLog({
+      level: 'warn',
+      source: 'error-reporting-upload',
+      message: '错误上报上传失败',
+      details: normalizeError(reportingError),
+    });
     console.warn('Error reporting upload failed', reportingError);
   }
 }
@@ -105,6 +124,12 @@ const persistSessionMarker = async (state: SessionMarker['state']) => {
       JSON.stringify(buildSessionMarker(state)),
     );
   } catch (error) {
+    appendAppLog({
+      level: 'warn',
+      source: 'session-marker-write',
+      message: '会话标记写入失败',
+      details: normalizeError(error),
+    });
     console.warn('Session marker write failed', error);
   }
 };
@@ -135,6 +160,12 @@ const installSessionTracking = () => {
         }
       }
     } catch (error) {
+      appendAppLog({
+        level: 'warn',
+        source: 'session-marker-read',
+        message: '会话标记读取失败',
+        details: normalizeError(error),
+      });
       console.warn('Session marker read failed', error);
     }
 
@@ -152,6 +183,10 @@ export function installGlobalErrorHandlers() {
   }
 
   hasInstalledGlobalHandler = true;
+  appendAppLog({
+    source: 'global-error-handler',
+    message: '全局错误处理已安装',
+  });
   installSessionTracking();
 
   const errorUtils = getErrorUtils();

@@ -26,18 +26,24 @@ jest.mock('react-native-geolocation-service', () => ({
   }),
 }));
 
-jest.mock('react-native-maps', () => {
+jest.mock('@maplibre/maplibre-react-native', () => {
   const React = require('react');
   const {View} = require('react-native');
 
   const MockMapView = ({children}) => React.createElement(View, null, children);
-  const MockMarker = ({children}) => React.createElement(View, null, children);
-  const MockPolyline = () => React.createElement(View, null);
+  const MockCamera = () => React.createElement(View, null);
+  const MockPointAnnotation = ({children}) => React.createElement(View, null, children);
+  const MockShapeSource = ({children}) => React.createElement(View, null, children);
+  const MockLineLayer = () => React.createElement(View, null);
+  const MockUserLocation = () => React.createElement(View, null);
 
   return {
     __esModule: true,
-    default: MockMapView,
-    Marker: MockMarker,
-    Polyline: MockPolyline,
+    MapView: MockMapView,
+    Camera: MockCamera,
+    PointAnnotation: MockPointAnnotation,
+    ShapeSource: MockShapeSource,
+    LineLayer: MockLineLayer,
+    UserLocation: MockUserLocation,
   };
 });
