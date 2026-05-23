@@ -107,6 +107,10 @@ const loadMapsModule = (): MapsModule | null => {
   }
 };
 
+const clearMapsModuleCache = (): void => {
+  cachedMapsModule = undefined;
+};
+
 const loadSafeAreaViewComponent = (): React.ComponentType<any> => {
   if (cachedSafeAreaViewComponent) {
     return cachedSafeAreaViewComponent;
@@ -172,14 +176,23 @@ class MapRenderBoundary extends React.Component<
     console.warn('Map render failed', error);
   }
 
+  handleRetry = () => {
+    // 清除模块缓存并重置错误状态，让地图可以重新加载
+    clearMapsModuleCache();
+    this.setState({hasError: false});
+  };
+
   render() {
     if (this.state.hasError) {
       return (
         <View style={styles.mapFallback}>
           <Text style={styles.mapFallbackTitle}>地图暂时不可用</Text>
           <Text style={styles.mapFallbackText}>
-            当前设备的地图模块加载失败，应用其他功能仍可继续使用。
+            地图渲染出现异常，应用其他功能仍可继续使用。
           </Text>
+          <Pressable style={styles.mapFallbackButton} onPress={this.handleRetry}>
+            <Text style={styles.mapFallbackButtonText}>重试渲染地图</Text>
+          </Pressable>
         </View>
       );
     }
@@ -297,7 +310,17 @@ function App() {
     return [targetLocation.longitude, targetLocation.latitude];
   }, [currentLocation, targetLocation]);
 
-  const mapZoomLevel = currentLocation ? 10.5 : 13.5;
+  const cameraCenterCoordinate = useMemo<[number, number]>(() => {
+    // 相机只跟随目标点变化，位置变化时不重新定位相机
+    return [targetLocation.longitude, targetLocation.latitude];
+  }, [targetLocation]);
+
+  const cameraZoomLevel = currentLocation ? 10.5 : 13.5;
+
+  const cameraKey = useMemo(() => {
+    // 只在目标点变化时强制刷新相机动画
+    return `${targetLocation.latitude.toFixed(5)},${targetLocation.longitude.toFixed(5)}`;
+  }, [targetLocation]);
 
   const routeGeoJson = useMemo(() => {
     if (!currentLocation) {
@@ -684,9 +707,11 @@ function App() {
   };
 
   const enableEmbeddedMap = () => {
+    // 清除模块缓存，使重试时能重新 require 原生模块
+    clearMapsModuleCache();
     appendAppLog({
       source: 'embedded-map',
-      message: '用户手动尝试加载内置地图',
+      message: '用户手动尝试重新加载内置地图',
     });
     setShouldRenderEmbeddedMap(true);
   };
@@ -778,12 +803,13 @@ function App() {
                   });
                 }}>
                 <CameraComponent
+                  key={cameraKey}
                   defaultSettings={{
-                    centerCoordinate: mapCenterCoordinate,
-                    zoomLevel: mapZoomLevel,
+                    centerCoordinate: cameraCenterCoordinate,
+                    zoomLevel: cameraZoomLevel,
                   }}
-                  centerCoordinate={mapCenterCoordinate}
-                  zoomLevel={mapZoomLevel}
+                  centerCoordinate={cameraCenterCoordinate}
+                  zoomLevel={cameraZoomLevel}
                   animationDuration={600}
                 />
 
@@ -793,7 +819,7 @@ function App() {
                   renderMode="native"
                   androidRenderMode="gps"
                   showsUserHeadingIndicator
-                  minDisplacement={1}
+                  minDisplacement={10}
                   onUpdate={(location: {coords?: Coordinate}) => {
                     const coords = location?.coords;
                     if (!coords) {
